@@ -74,14 +74,9 @@ class GUI:
 
         input_window.destroy()
 
-        # Refresh the data displayed in the GUI (optional)
-        # self.show_records()
-
     def update_record(self):
-        # Create a new window for input
         input_window = tk.Toplevel(self.window)
 
-        # Create labels and entry widgets for each field in the record
         id_label = tk.Label(input_window, text='ID')
         id_entry = tk.Entry(input_window)
         id_label.grid(row=0, column=0)
@@ -107,7 +102,6 @@ class GUI:
         camera_label.grid(row=4, column=0)
         camera_entry.grid(row=4, column=1)
 
-        # Create a button to submit the input
         submit_button = tk.Button(input_window, text='Update Record',
                                   command=lambda: self.submit_update(id_entry.get(), name_entry.get(),
                                                                      model_entry.get(),
@@ -116,27 +110,20 @@ class GUI:
         submit_button.grid(row=5, column=0, columnspan=2)
 
     def submit_update(self, id, name, model, memory, camera, input_window):
-        # Update the record in the database
         query = "UPDATE records SET name=?, model=?, memory=?, camera=? WHERE id=?"
         params = (name, model, memory, camera, id)
         self.db.execute_query(query, params)
 
         input_window.destroy()
 
-        # Refresh the data displayed in the GUI (optional)
-        # self.show_records()
-
     def delete_record(self):
-        # Create a new window for input
         input_window = tk.Toplevel(self.window)
 
-        # Create a label and entry widget for the ID of the record to delete
         id_label = tk.Label(input_window, text='ID')
         id_entry = tk.Entry(input_window)
         id_label.grid(row=0, column=0)
         id_entry.grid(row=0, column=1)
 
-        # Create a button to submit the input
         submit_button = tk.Button(input_window, text='Delete Record',
                                   command=lambda: self.submit_delete(id_entry.get(), input_window))
         submit_button.grid(row=1, column=0, columnspan=2)
