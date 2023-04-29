@@ -1,38 +1,64 @@
+from db import Database
 import os
+import subprocess
 import tkinter as tk
 from tkinter import ttk
-from db import Database
+from tkinter import filedialog
+import csv
+import re
 
 
 class GUI:
     def __init__(self):
         self.window = tk.Tk()
         self.db = Database('database.sqlite3')
+        self.window.geometry('300x500')
 
         # Create GUI elements here
-        self.add_button = tk.Button(self.window, text='Add Record', command=self.add_record)
-        self.add_button.pack()
+        buttons = [
+            ('Add Record', self.add_record, '#FF5C5C'),
+            ('Update Record', self.update_record, '#FFB647'),
+            ('Delete Record', self.delete_record, 'black'),
+            ('Search Records', self.search_records, '#52DF6F'),
+            ('Sort Records', self.sort_records, '#00008B'),
+            ('Show All Records', self.show_all_records, '#A85CC4'),
+            ('Create Printable Document', self.create_printable_document, '#795548'),
+            ('Import CSV', self.import_csv, '#00bcd4'),
+            ('Export CSV', self.export_csv, '#2196F3'),
+            ('Exit', self.exit_app, '#9E9E9E')
+        ]
 
-        self.update_button = tk.Button(self.window, text='Update Record', command=self.update_record)
-        self.update_button.pack()
-
-        self.delete_button = tk.Button(self.window, text='Delete Record', command=self.delete_record)
-        self.delete_button.pack()
-
-        self.search_button = tk.Button(self.window, text='Search Records', command=self.search_records)
-        self.search_button.pack()
-
-        self.sort_button = tk.Button(self.window, text='Sort Records', command=self.sort_records)
-        self.sort_button.pack()
-
-        self.show_all_button = tk.Button(self.window, text='Show All Records', command=self.show_all_records)
-        self.show_all_button.pack()
-
-        self.print_button = tk.Button(self.window, text='Create Printable Document',
-                                      command=self.create_printable_document)
-        self.print_button.pack()
+        for text, command, color in buttons:
+            button = tk.Button(self.window, text=text, command=command, font=('Helvetica', 14),
+                               fg='white', bg=color, borderwidth=2, relief='groove')
+            button.pack()
 
         self.window.mainloop()
+
+    def exit_app(self):
+        self.window.destroy()
+
+    def import_csv(self):
+        file_path = filedialog.askopenfilename(defaultextension='.csv', filetypes=[('CSV Files', '*.csv')])
+        if file_path:
+            with open(file_path, 'r') as f:
+                reader = csv.reader(f)
+                next(reader)  # Skip header row
+                for row in reader:
+                    name, model, memory, camera = row
+                    self.db.execute_query(f"INSERT INTO records (name, model, memory, camera) VALUES (?, ?, ?, ?)",
+                                          (name, model, memory, camera))
+            print("Data imported successfully.")
+
+    def export_csv(self):
+        file_path = tk.filedialog.asksaveasfilename(defaultextension='.csv', filetypes=[('CSV Files', '*.csv')])
+        if file_path:
+            with open(file_path, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(['Name', 'Model', 'Memory', 'Camera'])  # Write header row
+                for row in self.db.execute_query("SELECT name, model, memory, camera FROM records"):
+                    writer.writerow(row)
+            print("Data exported successfully.")
 
     def add_record(self):
         # Create a new window for input
@@ -67,6 +93,13 @@ class GUI:
         submit_button.grid(row=4, column=0, columnspan=2)
 
     def submit_record(self, name, model, memory, camera, input_window):
+        # Add "GB" to the memory field if it doesn't already have it
+        if not memory.endswith('GB'):
+            memory += 'GB'
+
+        # Add "MP" to the camera field if it doesn't already have it
+        if not camera.endswith('MP'):
+            camera += 'MP'
 
         query = "INSERT INTO records (name, model, memory, camera) VALUES (?, ?, ?, ?)"
         params = (name, model, memory, camera)
@@ -76,6 +109,8 @@ class GUI:
 
     def update_record(self):
         input_window = tk.Toplevel(self.window)
+
+        self.show_all_records()
 
         id_label = tk.Label(input_window, text='ID')
         id_entry = tk.Entry(input_window)
@@ -138,14 +173,14 @@ class GUI:
         input_window.destroy()
 
         # Refresh the data displayed in the GUI (optional)
-        # self.show_records()
+        self.show_all_records()
 
     def search_records(self):
         # Create a new window for input
         input_window = tk.Toplevel(self.window)
 
         # Create a label and entry widget for the search query
-        query_label = tk.Label(input_window, text='Search Query')
+        query_label = tk.Label(input_window, text='Search Query (write name or model of phone)')
         query_entry = tk.Entry(input_window)
         query_label.grid(row=0, column=0)
         query_entry.grid(row=0, column=1)
@@ -171,7 +206,7 @@ class GUI:
 
         # Add each result to the listbox widget
         for record in results:
-            result_string = f"ID: {record[0]}, Name: {record[1]}, Age: {record[2]}, Email: {record[3]}"
+            result_string = f"ID: {record[0]}, Name: {record[1]}, Model: {record[2]}, Camera: {record[3]}, Memory: {record[4]}"
             results_listbox.insert(tk.END, result_string)
 
         # Close the input window
@@ -196,21 +231,39 @@ class GUI:
         submit_button.grid(row=1, column=0, columnspan=2)
 
     def submit_sort(self, column):
-        # Sort the records in the database by the specified column
-        query = f"SELECT * FROM records ORDER BY {column}"
-        results = self.db.execute_query(query)
+        if column == 'memory':
+            query = "SELECT * FROM records"
+            results = self.db.execute_query(query)
 
-        # Create a new window to display the results
+            memory_regex = r'(\d+)GB'
+            results = [(row[0], row[1], row[2], int(re.findall(memory_regex, row[3])[0]), row[4]) for row in results]
+
+            results = sorted(results, key=lambda x: x[3])
+
+            results = [(row[0], row[1], row[2], f"{row[3]}GB", row[4]) for row in results]
+        elif column == 'camera':
+            pass
+            query = "SELECT * FROM records"
+            results = self.db.execute_query(query)
+
+            memory_regex = r'(\d+)MP'
+            results = [(row[0], row[1], row[2], row[3], int(re.findall(memory_regex, row[4])[0])) for row in results]
+
+            results = sorted(results, key=lambda x: x[4])
+
+            results = [(row[0], row[1], row[2], row[3], f"{row[4]}MP") for row in results]
+        else:
+            query = f"SELECT * FROM records ORDER BY {column}"
+            results = self.db.execute_query(query)
+
         results_window = tk.Toplevel(self.window)
 
-        # Create a table to display the results
         columns = ("ID", "Name", "Model", "Memory", "Camera")
         table = ttk.Treeview(results_window, columns=columns, show="headings")
         for col in columns:
             table.heading(col, text=col)
         table.pack(fill="both", expand=True)
 
-        # Populate the table with the sorted records
         for row in results:
             table.insert("", "end", values=row)
 
@@ -226,10 +279,12 @@ class GUI:
         # Create a file and write records to it
         with open('records.txt', 'w') as f:
             for record in results:
-                f.write(f"{record[0]}\t{record[1]}\t{record[2]}\t{record[3]}\t{record[4]}\n")
-
-        # Open the file in the default text editor (optional)
+                f.write(f"| {record[0]:<5} | {record[1]:<30} | {record[2]:<20} | {record[3]:<8} | {record[4]:<20} |\n")
+                f.write("|-------|--------------------------------|----------------------|----------"
+                        "|----------------------|\n")
         os.startfile('records.txt')
+
+        subprocess.Popen(['print', 'records.txt'], shell=True)
 
     def show_all_records(self):
         # Retrieve all records from the database
@@ -242,19 +297,21 @@ class GUI:
 
         # Create a Treeview widget to display the records
         tree = ttk.Treeview(records_window)
-        tree['columns'] = ('Name', 'Age', 'Email')
+        tree['columns'] = ('Name', 'Model', 'Memory', 'Camera')
         tree.heading('#0', text='ID')
         tree.column('#0', width=50)
         tree.heading('Name', text='Name')
         tree.column('Name', width=150)
-        tree.heading('Age', text='Age')
-        tree.column('Age', width=50)
-        tree.heading('Email', text='Email')
-        tree.column('Email', width=200)
+        tree.heading('Model', text='Model')
+        tree.column('Model', width=50)
+        tree.heading('Memory', text='Memory')
+        tree.column('Memory', width=200)
+        tree.heading('Camera', text='Camera')
+        tree.column('Camera', width=200)
 
         # Add each record to the Treeview
         for record in records:
-            tree.insert('', 'end', text=record[0], values=(record[1], record[2], record[3]))
+            tree.insert('', 'end', text=record[0], values=(record[1], record[2], record[3], record[4]))
 
         # Pack the Treeview
         tree.pack(fill='both', expand=True)
